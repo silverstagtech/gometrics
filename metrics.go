@@ -69,6 +69,11 @@ func (mf *MetricFactory) FlushGaugesEvery(milliseconds int) {
 
 func (mf *MetricFactory) flushGauges() {
 	mf.mutex.RLock()
+	defer mf.mutex.RUnlock()
+
+	if mf.registeredGauges == nil {
+		return
+	}
 	for _, protectedGauge := range mf.registeredGauges {
 		b, err := mf.serializer.Gauge(protectedGauge.Export())
 		if err != nil {
@@ -77,7 +82,7 @@ func (mf *MetricFactory) flushGauges() {
 		}
 		mf.shipper.Ship(b)
 	}
-	mf.mutex.RUnlock()
+
 }
 
 // Shutdown tears down the factory and tells the shippers to flush anything they have left
@@ -113,11 +118,27 @@ func (mf *MetricFactory) Counter(name string, value int, rate float32, tags map[
 // If you need to use Gauges remember to call the FlushGaugeEvery(milliseconds) function when creating
 // the MetricFactory.
 func (mf *MetricFactory) RegisterGauge(name string, tags map[string]string) {
+	mf.mutex.Lock()
+	defer mf.mutex.Unlock()
 	if mf.registeredGauges == nil {
 		mf.registeredGauges = make(map[string]*measurements.Gauge)
 	}
 	if _, ok := mf.registeredGauges[name]; !ok {
 		mf.registeredGauges[name] = measurements.NewGauge(mf.prefix, name, mergeTags(mf.defaultTags, tags))
+	}
+}
+
+// RemoveGauge allows you to stop a gauge.
+// Its not called DeregisterGauge because that name would be too close to Register
+func (mf *MetricFactory) RemoveGauge(name string) {
+	mf.mutex.Lock()
+	defer mf.mutex.Unlock()
+
+	if mf.registeredGauges == nil {
+		return
+	}
+	if _, ok := mf.registeredGauges[name]; !ok {
+		delete(mf.registeredGauges, name)
 	}
 }
 

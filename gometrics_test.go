@@ -2,6 +2,7 @@ package gometrics
 
 import (
 	"testing"
+	"time"
 
 	"github.com/silverstagtech/gotracer"
 
@@ -88,6 +89,27 @@ func TestSingleGaugeZero(t *testing.T) {
 	}
 }
 
+func TestSingleGaugeFlush(t *testing.T) {
+	se := json.New(false)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	factory.FlushGaugesEvery(2)
+	factory.RegisterGauge("gauge", nil)
+	factory.GaugeInc("test")
+	time.Sleep(time.Millisecond * 4)
+	factory.Shutdown()
+
+	if sh.tracer.Len() < 2 {
+		t.Logf("Gauge did not get flushed")
+		t.Fail()
+	}
+	t.Logf("%s\n", sh.tracer.Show())
+}
+
 func TestSingleGauge(t *testing.T) {
 	se := json.New(false)
 	sh := &tracing{tracer: gotracer.New()}
@@ -157,5 +179,23 @@ func TestMultipleGauges(t *testing.T) {
 	}
 	for _, output := range sh.tracer.Show() {
 		t.Logf("%s", output)
+	}
+}
+
+func TestNilGauge(t *testing.T) {
+	se := json.New(true)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	factory.FlushGaugesEvery(2)
+	time.Sleep(time.Millisecond * 3)
+	factory.RemoveGauge("test")
+	factory.Shutdown()
+
+	if sh.tracer.Len() != 0 {
+		t.Logf("Rouge metric in the buffer.\n%s", sh.tracer.Show())
 	}
 }

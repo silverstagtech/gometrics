@@ -60,14 +60,14 @@ func (st *simpleTicker) start() {
 
 	go func() {
 		for {
+			if stopped() {
+				close(st.c)
+				return
+			}
 			time.Sleep(st.sleeper)
 			select {
 			case st.c <- struct{}{}:
 			default:
-				if stopped() {
-					return
-				}
-				st.RUnlock()
 				continue
 			}
 		}
@@ -78,5 +78,4 @@ func (st *simpleTicker) stop() {
 	st.Lock()
 	defer st.Unlock()
 	st.stopped = true
-	close(st.c)
 }
