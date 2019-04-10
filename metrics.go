@@ -45,7 +45,6 @@ func NewFactory(prefix string, defaultTags map[string]string, serializer seriali
 	}
 }
 
-//func (mf *MetricFactory) Timer()   {}
 //func (mf *MetricFactory) Poly()    {}
 
 // FlushGaugesEvery takes an int which represents milliseconds ans is used to flush gauges when required.
@@ -164,4 +163,19 @@ func (mf *MetricFactory) GaugeSet(name string, value int64) {
 		return
 	}
 	mf.registeredGauges[name].Set(value)
+}
+
+// Timer takes a details of a timer and send it to the shipper.
+// You need to tell the timer what precision you want to show in your measurement.
+// The value can and most likely will be from time.Since().
+func (mf *MetricFactory) Timer(name string, precision TimerPrecision, value time.Duration, tags map[string]string) {
+	divider, unit := timerUnit(precision)
+	duration := value / divider
+	timer := measurements.NewTimer(mf.prefix, name, duration, unit, mergeTags(mf.defaultTags, tags))
+	b, err := mf.serializer.Timer(timer)
+	if err != nil {
+		mf.onError(err)
+		return
+	}
+	mf.shipper.Ship(b)
 }

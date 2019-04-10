@@ -2,7 +2,6 @@ package json
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/silverstagtech/gometrics/measurements"
 )
@@ -67,8 +66,8 @@ func (js *JSONSerializer) Timer(m *measurements.Timer) ([]byte, error) {
 			Type:  "timer",
 			Name:  buildName(m.Prefix, m.Name),
 			Tags:  m.Tags,
-			Value: int64(m.Duration / time.Millisecond),
-			Unit:  "ms",
+			Value: int64(m.Value),
+			Unit:  m.Unit,
 		},
 	)
 }

@@ -12,20 +12,20 @@ Metric types
 
 - [x] Counters
 - [x] Gauges
-- [ ] Timers
+- [x] Timers
 - [ ] Polymorphic metrics
 - [ ] ~~Histograms~~ Maybe later...
 
 Features on metrics
 
-- [x] Tagging on all metrics
+- [x] Tagging on individual metrics
 - [x] Sample rate for counters
 - [x] Shipper with plugins
 - [ ] Shipper: UDP/TCP statsd
 - [ ] Shipper: Influx HTTP(S)
 - [x] Shipper: STDOUT
 - [x] Shipper: DevNull
-- [ ] Default tagging for shipper
+- [x] Default tagging all metrics
 - [ ] Serialization support for metrics as plugins
 - [ ] Serialization: Influx Line protocol
 - [ ] Serialization: Statsd with datadog and influx tagging

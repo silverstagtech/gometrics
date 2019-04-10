@@ -1,11 +1,13 @@
 package gometrics
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/silverstagtech/gotracer"
 
+	"github.com/silverstagtech/gometrics/measurements"
 	"github.com/silverstagtech/gometrics/serializers/json"
 	"github.com/silverstagtech/gometrics/shippers/devnull"
 )
@@ -197,5 +199,58 @@ func TestNilGauge(t *testing.T) {
 
 	if sh.tracer.Len() != 0 {
 		t.Logf("Rouge metric in the buffer.\n%s", sh.tracer.Show())
+	}
+}
+
+func TestTimers(t *testing.T) {
+	se := json.New(true)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	start := time.Now()
+	time.Sleep(time.Millisecond * 5)
+	factory.Timer("test_timer_ns", TimerNS, time.Since(start), nil)
+	factory.Timer("test_timer_µs", TimerUS, time.Since(start), nil)
+	factory.Timer("test_timer_ms", TimerMS, time.Since(start), nil)
+	factory.Timer("test_timer_sec", TimerSec, time.Since(start), nil)
+	factory.Timer("test_timer_min", TimerMin, time.Since(start), nil)
+	factory.Timer("test_timer_hour", TimerH, time.Since(start), nil)
+	factory.Shutdown()
+
+	t.Logf("%s", sh.tracer.Show())
+}
+
+type badSerializer struct{}
+
+func (badSerializer) Counter(m *measurements.Counter) ([]byte, error) {
+	return nil, fmt.Errorf("here is an error")
+}
+func (badSerializer) Timer(m *measurements.Timer) ([]byte, error) {
+	return nil, fmt.Errorf("here is an error")
+}
+func (badSerializer) Gauge(m *measurements.Gauge) ([]byte, error) {
+	return nil, fmt.Errorf("here is an error")
+}
+func (badSerializer) Poly(m *measurements.Poly) ([]byte, error) {
+	return nil, fmt.Errorf("here is an error")
+}
+
+func TestFactoryError(t *testing.T) {
+	se := &badSerializer{}
+	sh := &tracing{tracer: gotracer.New()}
+	gotError := false
+	errFunc := func(error) {
+		t.Logf("Caught factory error")
+		gotError = true
+	}
+	factory := NewFactory("test", nil, se, sh, errFunc)
+	factory.Counter("test", 1, 1, nil)
+	factory.Shutdown()
+	if !gotError {
+		t.Logf("Factory got an error but didn't call error func")
+		t.Fail()
 	}
 }
