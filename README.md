@@ -10,23 +10,26 @@ Metrics doesn't try to be the fastest, rather it tires to be useable.
 
 Metric types
 
-- [ ] Counters
-- [ ] Gauges
+- [x] Counters
+- [x] Gauges
 - [ ] Timers
-- [ ] Events
+- [ ] Polymorphic metrics
 - [ ] ~~Histograms~~ Maybe later...
 
 Features on metrics
 
-- [ ] Tagging on all metrics
-- [ ] Sample rate
-- [ ] Shipper with plugins
+- [x] Tagging on all metrics
+- [x] Sample rate for counters
+- [x] Shipper with plugins
 - [ ] Shipper: UDP/TCP statsd
 - [ ] Shipper: Influx HTTP(S)
+- [x] Shipper: STDOUT
+- [x] Shipper: DevNull
 - [ ] Default tagging for shipper
 - [ ] Serialization support for metrics as plugins
 - [ ] Serialization: Influx Line protocol
-- [ ] Serialization: Statsd
+- [ ] Serialization: Statsd with datadog and influx tagging
+- [x] Serialization: JSON with pretty printing
 
 ## What is a Metric
 

@@ -2,6 +2,8 @@ package gometrics
 
 import (
 	"math/rand"
+	"sync"
+	"time"
 )
 
 func mergeTags(defaultTags, MetricTags map[string]string) map[string]string {
@@ -22,11 +24,59 @@ func mergeTags(defaultTags, MetricTags map[string]string) map[string]string {
 }
 
 func gatekeeper(rate float32) bool {
-	if rate <= 1 {
+	if rate >= 1 {
 		return true
 	}
 	if rand.Float32() > rate {
 		return true
 	}
 	return false
+}
+
+type simpleTicker struct {
+	sleeper time.Duration
+	stopped bool
+	c       chan struct{}
+	sync.RWMutex
+}
+
+func newSimpleTicker(milliseconds int) *simpleTicker {
+	return &simpleTicker{
+		sleeper: time.Millisecond * time.Duration(milliseconds),
+	}
+}
+
+func (st *simpleTicker) start() {
+	stopped := func() bool {
+		st.RLock()
+		defer st.RUnlock()
+		return st.stopped
+	}
+
+	st.Lock()
+	st.c = make(chan struct{}, 1)
+	st.stopped = false
+	st.Unlock()
+
+	go func() {
+		for {
+			time.Sleep(st.sleeper)
+			select {
+			case st.c <- struct{}{}:
+			default:
+				if stopped() {
+					return
+				}
+				st.RUnlock()
+				continue
+			}
+		}
+	}()
+}
+
+func (st *simpleTicker) stop() {
+	st.Lock()
+	defer st.Unlock()
+	st.stopped = true
+	close(st.c)
 }
