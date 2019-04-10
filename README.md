@@ -13,7 +13,7 @@ Metric types
 - [x] Counters
 - [x] Gauges
 - [x] Timers
-- [ ] Polymorphic metrics
+- [x] Polymorphic metrics
 - [ ] ~~Histograms~~ Maybe later...
 
 Features on metrics
@@ -26,7 +26,7 @@ Features on metrics
 - [x] Shipper: STDOUT
 - [x] Shipper: DevNull
 - [x] Default tagging all metrics
-- [ ] Serialization support for metrics as plugins
+- [x] Serialization support for metrics as plugins
 - [ ] Serialization: Influx Line protocol
 - [ ] Serialization: Statsd with datadog and influx tagging
 - [x] Serialization: JSON with pretty printing
@@ -60,3 +60,5 @@ Metrics gathered are only useful if they go somewhere. Thats what shippers are f
 ### Serialization
 
 The receiving end of the metric needs to know how to ready it. So we can serialize the message into something they would be able to read. Most metric gathering platforms have the same features, metrics with fields, tags and time stamps. How that data is presented is normally the difference.
+
+The metrics don't come with timestamps as many receivers will put the time stamps on it for you. However there is nothing stopping the serializer from adding a time stamp as it knows what it should be and where in the serialized data format.

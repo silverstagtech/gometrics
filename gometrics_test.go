@@ -184,6 +184,94 @@ func TestMultipleGauges(t *testing.T) {
 	}
 }
 
+// This test we are really looking for a panic. something like calling on a nil value
+// from a map.
+func TestRemovingGauges(t *testing.T) {
+	se := json.New(true)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	gaugesToTest := []string{"one", "two", "three"}
+	gaugeTags := map[string]string{
+		"gaugeTag": "one",
+	}
+	for _, name := range gaugesToTest {
+		factory.RegisterGauge(name, gaugeTags)
+	}
+
+	for _, name := range gaugesToTest {
+		factory.GaugeSet(name, 10)
+		factory.GaugeInc(name)
+		factory.GaugeInc(name)
+		factory.GaugeInc(name)
+		factory.GaugeDec(name)
+		factory.GaugeDec(name)
+		factory.GaugeDec(name)
+		factory.GaugeDec(name)
+		factory.GaugeSet(name, -10)
+	}
+
+	for _, name := range gaugesToTest {
+		factory.RemoveGauge(name)
+	}
+
+	for _, name := range gaugesToTest {
+		factory.GaugeSet(name, 10)
+		factory.GaugeDec(name)
+		factory.GaugeSet(name, -10)
+	}
+
+	factory.Shutdown()
+
+	if sh.tracer.Len() != 0 {
+		t.Logf("Gauges did not flush")
+		t.Fail()
+	}
+	for _, output := range sh.tracer.Show() {
+		t.Logf("%s", output)
+	}
+}
+
+func BenchmarkGauges(b *testing.B) {
+	se := json.New(false)
+	sh := devnull.New()
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { b.Logf("Factory Failed!"); b.FailNow() })
+
+	gaugesToTest := []string{"one"}
+	gaugeTags := map[string]string{
+		"gaugeTag": "one",
+	}
+	for i := 0; i < b.N; i++ {
+		for _, name := range gaugesToTest {
+			factory.RegisterGauge(name, gaugeTags)
+		}
+
+		for _, name := range gaugesToTest {
+			factory.GaugeSet(name, 10)
+			factory.GaugeInc(name)
+			factory.GaugeInc(name)
+			factory.GaugeInc(name)
+			factory.GaugeDec(name)
+			factory.GaugeDec(name)
+			factory.GaugeDec(name)
+			factory.GaugeDec(name)
+			factory.GaugeSet(name, -10)
+		}
+
+		for _, name := range gaugesToTest {
+			factory.RemoveGauge(name)
+		}
+	}
+	factory.Shutdown()
+}
+
 func TestNilGauge(t *testing.T) {
 	se := json.New(true)
 	sh := &tracing{tracer: gotracer.New()}
@@ -253,4 +341,45 @@ func TestFactoryError(t *testing.T) {
 		t.Logf("Factory got an error but didn't call error func")
 		t.Fail()
 	}
+}
+
+func TestPolyEmpty(t *testing.T) {
+	se := json.New(true)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	p := factory.NewPoly("test_poly", nil, nil)
+	factory.SubmitPoly(p)
+	factory.Shutdown()
+
+	if sh.tracer.Len() < 1 {
+		t.Logf("Empty poly didn't make a measurement")
+		t.Fail()
+	}
+	t.Logf("%s", sh.tracer.Show())
+}
+
+func TestPoly(t *testing.T) {
+	se := json.New(true)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(error) { t.Logf("Factory Failed!"); t.FailNow() })
+	p := factory.NewPoly("test_poly", nil, nil)
+	p.AddField("event", "start")
+	p.AddField("event_message", "This is a app starting")
+	p.AddTag("app_name", "potato")
+	factory.SubmitPoly(p)
+	factory.Shutdown()
+
+	if sh.tracer.Len() < 1 {
+		t.Logf("Poly didn't make a measurement")
+		t.Fail()
+	}
+	t.Logf("%s", sh.tracer.Show())
 }

@@ -45,8 +45,6 @@ func NewFactory(prefix string, defaultTags map[string]string, serializer seriali
 	}
 }
 
-//func (mf *MetricFactory) Poly()    {}
-
 // FlushGaugesEvery takes an int which represents milliseconds ans is used to flush gauges when required.
 // As gauges track state they do not need to be flush out as often as counters.
 // If you are going to be using gauges then you will need to set this, if not then omit it.
@@ -177,5 +175,19 @@ func (mf *MetricFactory) Timer(name string, precision TimerPrecision, value time
 		mf.onError(err)
 		return
 	}
+	mf.shipper.Ship(b)
+}
+
+func (mf *MetricFactory) NewPoly(name string, fields map[string]interface{}, tags map[string]string) *measurements.Poly {
+	return measurements.NewPoly(mf.prefix, name, fields, mergeTags(mf.defaultTags, tags))
+}
+
+func (mf *MetricFactory) SubmitPoly(poly *measurements.Poly) {
+	b, err := mf.serializer.Poly(poly)
+	if err != nil {
+		mf.onError(err)
+		return
+	}
+
 	mf.shipper.Ship(b)
 }
