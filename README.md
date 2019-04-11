@@ -28,7 +28,7 @@ Features on metrics
 - [x] Default tagging all metrics
 - [x] Serialization support for metrics as plugins
 - [ ] Serialization: Influx Line protocol
-- [ ] Serialization: Statsd with datadog and influx tagging
+- [x] Serialization: Statsd with datadog and influx tagging
 - [x] Serialization: JSON with pretty printing
 
 ## What is a Metric
