@@ -9,6 +9,7 @@ import (
 
 	"github.com/silverstagtech/gometrics/measurements"
 	"github.com/silverstagtech/gometrics/serializers/json"
+	"github.com/silverstagtech/gometrics/serializers/statsd"
 	"github.com/silverstagtech/gometrics/shippers/devnull"
 )
 
@@ -374,6 +375,30 @@ func TestPoly(t *testing.T) {
 	p.AddField("event", "start")
 	p.AddField("event_message", "This is a app starting")
 	p.AddTag("app_name", "potato")
+	factory.SubmitPoly(p)
+	factory.Shutdown()
+
+	if sh.tracer.Len() < 1 {
+		t.Logf("Poly didn't make a measurement")
+		t.Fail()
+	}
+	t.Logf("%s", sh.tracer.Show())
+}
+
+func TestPolyStatsD(t *testing.T) {
+	se := statsd.New(statsd.TaggingDataDog)
+	sh := &tracing{tracer: gotracer.New()}
+	defaultTags := map[string]string{
+		"testone": "1",
+	}
+
+	factory := NewFactory("test", defaultTags, se, sh, func(err error) { t.Logf("Factory Failed! Error: %s", err); t.FailNow() })
+	p := factory.NewPoly("poly_event", nil, nil)
+	p.AddTag("event", "start")
+	p.AddTag("event_message", "This is a app starting")
+	p.AddTag("app_name", "potato")
+	p.AddTag(statsd.MagicTagMetricType, "counter")
+	p.AddField("start_event", 1)
 	factory.SubmitPoly(p)
 	factory.Shutdown()
 
