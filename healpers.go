@@ -4,18 +4,21 @@ import (
 	"math/rand"
 )
 
+// mergeTags needs to return a new map everytime because go passes maps by reference
+// and they get screwed up as we add new tags to it everytime this function is called.
 func mergeTags(defaultTags, MetricTags map[string]string) map[string]string {
-	if defaultTags == nil {
-		return MetricTags
+	output := make(map[string]string)
+
+	if defaultTags != nil {
+		for key, value := range defaultTags {
+			output[key] = value
+		}
 	}
 
-	if MetricTags == nil {
-		return defaultTags
-	}
-
-	output := defaultTags
-	for key, value := range MetricTags {
-		output[key] = value
+	if MetricTags != nil {
+		for key, value := range MetricTags {
+			output[key] = value
+		}
 	}
 
 	return output
