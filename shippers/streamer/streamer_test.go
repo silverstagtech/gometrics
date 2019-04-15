@@ -102,18 +102,19 @@ func (ns *NetServer) tcpHandleConnection(conn net.Conn) {
 
 	rc := bufio.NewReader(conn)
 	for {
-		//req, err := rw.ReadString('\n')
-		req, err := rc.ReadString('\n')
+		req, err := rc.ReadBytes(10)
 		if err != nil && err != io.EOF {
 			ns.t.Logf("Failed to read data on the stream. Error: %s", err)
-			rc.Reset(rc)
 			ns.t.Fail()
-			return
+			break
+		}
+		if len(req) == 0 {
+			break
 		}
 
-		ns.tracer.Send(req)
-		rc.Reset(rc)
+		ns.tracer.SendBytes(req)
 	}
+	rc.Reset(rc)
 }
 
 func (ns *NetServer) udpHandlePackets() {
@@ -405,11 +406,14 @@ func TestIntervalFlush(t *testing.T) {
 		t.Fail()
 	}
 
-	tcpStreamer.Ship([]byte("Hello World\n"))
+	tcpStreamer.Ship([]byte("Hello World 1"))
+	tcpStreamer.Ship([]byte("Hello World 2"))
+	tcpStreamer.Ship([]byte("Hello World 3"))
+	tcpStreamer.Ship([]byte("Hello World 4"))
 
-	time.Sleep(time.Millisecond * 5)
-	if srv.tracer.Len() < 1 {
-		t.Logf("TCP Streamer didn't get a message.")
+	time.Sleep(time.Millisecond * 10)
+	if srv.tracer.Len() != 4 {
+		t.Logf("TCP Streamer didn't get enough message when waiting for triggers.")
 		t.Fail()
 	}
 
@@ -421,5 +425,6 @@ func TestIntervalFlush(t *testing.T) {
 		t.Fail()
 	}
 
-	t.Logf("%s", srv.tracer.Show())
+	t.Logf("triggered output: %s", srv.tracer.Show())
+	t.Logf("triggered length: %d", srv.tracer.Len())
 }

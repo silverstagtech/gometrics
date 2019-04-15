@@ -129,7 +129,7 @@ func (stream *Streamer) sendTCP() {
 				close(stream.shutdown)
 				return
 			}
-			_, err := stream.conn.Write(bytes.Join(data, stream.joint))
+			_, err := stream.conn.Write(bytes.Join(data, nil))
 			if err != nil {
 				stream.onErrfunc(err)
 			}
@@ -138,7 +138,7 @@ func (stream *Streamer) sendTCP() {
 }
 
 func (stream *Streamer) sendUDP() {
-	packet := newPacket(stream.packetSize, stream.joint)
+	packet := newPacket(stream.packetSize)
 	for {
 		select {
 		case data, ok := <-stream.buffer.out:
@@ -209,7 +209,7 @@ func (stream *Streamer) sendUDP() {
 // Ship accepts []byte and adds it to the buffer
 func (stream *Streamer) Ship(b []byte) {
 	select {
-	case stream.buffer.in <- b:
+	case stream.buffer.in <- append(b, stream.joint...):
 	default:
 		stream.onErrfunc(fmt.Errorf("Buffer is full or closed, can't send measurement"))
 	}

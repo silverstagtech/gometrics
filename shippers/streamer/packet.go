@@ -14,13 +14,11 @@ type packet struct {
 	maxSize int
 	body    []byte
 	index   int
-	joint   []byte
 }
 
-func newPacket(maxSize int, joint []byte) *packet {
+func newPacket(maxSize int) *packet {
 	p := &packet{
 		maxSize: maxSize,
-		joint:   joint,
 		body:    make([]byte, maxSize),
 	}
 	p.reset()
@@ -31,19 +29,12 @@ func newPacket(maxSize int, joint []byte) *packet {
 // At this point you can read from the packet which will reset it and try again.
 func (p *packet) add(bs []byte) error {
 	// Will bs ever fit?
-	if p.maxSize+len(p.joint) > len(bs) {
+	if p.maxSize > len(bs) {
 		return errTooLarge
 	}
 	// Will bs fit in whats left?
-	if (len(bs) + (p.index + 1) + len(p.joint)) > p.maxSize {
+	if (len(bs) + (p.index + 1)) > p.maxSize {
 		return errOverCap
-	}
-	// Add the joining bytes if its not the first data in the buffer.
-	if p.index != 0 {
-		for _, b := range p.joint {
-			p.body[p.index] = b
-			p.index++
-		}
 	}
 	// Add the data
 	for _, b := range bs {
