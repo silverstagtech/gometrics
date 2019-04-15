@@ -100,7 +100,7 @@ func (mf *MetricFactory) Shutdown() chan struct{} {
 }
 
 // Counter is used to create a new event "counter" measurement.
-func (mf *MetricFactory) Counter(name string, value int, rate float32, tags map[string]string) {
+func (mf *MetricFactory) Counter(name string, value int64, rate float32, tags map[string]string) {
 	if !gatekeeper(rate) {
 		return
 	}

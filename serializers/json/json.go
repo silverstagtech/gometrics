@@ -37,7 +37,7 @@ type counter struct {
 	Name  string            `json:"name"`
 	Tags  map[string]string `json:"tags"`
 	Rate  float32           `json:"rate"`
-	Value int               `json:"value"`
+	Value int64             `json:"value"`
 }
 
 func (js *JSONSerializer) Counter(m *measurements.Counter) ([]byte, error) {
