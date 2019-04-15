@@ -99,6 +99,16 @@ func (stream *Streamer) Connect() error {
 }
 
 func (stream *Streamer) startSending() {
+	go func() {
+		for {
+			select {
+			case <-stream.ticker.C:
+				select {
+				case stream.buffer.trigger <- struct{}{}:
+				}
+			}
+		}
+	}()
 	if stream.protocol == TCP {
 		go stream.sendTCP()
 		return

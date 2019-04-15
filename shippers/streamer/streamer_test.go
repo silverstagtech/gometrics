@@ -406,7 +406,13 @@ func TestIntervalFlush(t *testing.T) {
 	}
 
 	tcpStreamer.Ship([]byte("Hello World\n"))
+
 	time.Sleep(time.Millisecond * 5)
+	if srv.tracer.Len() < 1 {
+		t.Logf("TCP Streamer didn't get a message.")
+		t.Fail()
+	}
+
 	<-tcpStreamer.Shutdown()
 
 	err = srv.Close()
@@ -414,9 +420,6 @@ func TestIntervalFlush(t *testing.T) {
 		t.Logf("Error from closing connection. Error: %s", err)
 		t.Fail()
 	}
-	if srv.tracer.Len() < 1 {
-		t.Logf("TCP Streamer didn't get a message.")
-		t.Fail()
-	}
+
 	t.Logf("%s", srv.tracer.Show())
 }
