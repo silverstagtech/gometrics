@@ -1,14 +1,20 @@
 package streamer
 
-import "fmt"
+type errTooLarge struct {
+	s string
+}
 
-var (
-	errTooLarge tooLarge = fmt.Errorf("datagram too large for packet buffer")
-	errOverCap  overCap  = fmt.Errorf("datagram will make buffer too large")
-)
+func (errTooLarge) Error() string {
+	return "datagram too large for packet buffer"
+}
 
-type tooLarge error
-type overCap error
+type errOverCap struct {
+	s string
+}
+
+func (errOverCap) Error() string {
+	return "datagram will make buffer too large"
+}
 
 type packet struct {
 	maxSize int
@@ -29,12 +35,12 @@ func newPacket(maxSize int) *packet {
 // At this point you can read from the packet which will reset it and try again.
 func (p *packet) add(bs []byte) error {
 	// Will bs ever fit?
-	if p.maxSize > len(bs) {
-		return errTooLarge
+	if len(bs) > p.maxSize {
+		return errTooLarge{}
 	}
 	// Will bs fit in whats left?
 	if (len(bs) + (p.index + 1)) > p.maxSize {
-		return errOverCap
+		return errOverCap{}
 	}
 	// Add the data
 	for _, b := range bs {
@@ -51,6 +57,7 @@ func (p *packet) read() []byte {
 	for index, b := range p.body {
 		if b == EOF {
 			end = index
+			break
 		}
 	}
 	out := make([]byte, end)

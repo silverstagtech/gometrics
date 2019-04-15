@@ -99,6 +99,7 @@ func (stream *Streamer) Connect() error {
 }
 
 func (stream *Streamer) startSending() {
+	// Start the flush trigger
 	go func() {
 		for {
 			select {
@@ -109,6 +110,7 @@ func (stream *Streamer) startSending() {
 			}
 		}
 	}()
+	// Start the correct shipper
 	if stream.protocol == TCP {
 		go stream.sendTCP()
 		return
@@ -142,7 +144,6 @@ func (stream *Streamer) sendUDP() {
 	for {
 		select {
 		case data, ok := <-stream.buffer.out:
-
 			// Nothing more to come.
 			if !ok {
 				err := stream.conn.Close()
@@ -168,7 +169,7 @@ func (stream *Streamer) sendUDP() {
 				err := packet.add(bs)
 				if err != nil {
 					switch err.(type) {
-					case overCap:
+					case errOverCap:
 						// Will fit but buffer too full
 						toSend := packet.read()
 						if len(toSend) > 0 {
@@ -178,12 +179,12 @@ func (stream *Streamer) sendUDP() {
 						}
 						// try again, still doesn't fit?
 						if err := packet.add(bs); err != nil {
-
+							stream.onErrfunc(err)
 						}
-					case tooLarge:
+					case errTooLarge:
 						// Would never fit
 						if stream.udpSendOversize {
-							// go for broke and send anyway. might work, better than dropping the data.
+							// go for broke and send anyway. Might work, better than dropping the data.
 							_, err := stream.conn.Write(bs)
 							if err != nil {
 								stream.onErrfunc(err)

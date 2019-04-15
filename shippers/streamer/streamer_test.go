@@ -226,6 +226,7 @@ func TestUDPOversizeStream(t *testing.T) {
 		SetFlushInterval(time.Millisecond*2),
 		SetOnError(func(err error) { t.Logf("Streamer Error: %s", err); t.Fail() }),
 		SetMaxPacketSize(maxpacket),
+		SetSendOversize(true),
 	)
 
 	if err := udpStreamer.Connect(); err != nil {
@@ -246,10 +247,11 @@ func TestUDPOversizeStream(t *testing.T) {
 		t.Fail()
 	}
 
-	if srv.tracer.Len() < 1 {
-		t.Logf("UDP Streamer didn't get enough message.")
+	if len(srv.tracer.Show()[0]) != payloadsize+1 {
+		t.Logf("UDP Streamer didn't get correct number of bytes")
 		t.Fail()
 	}
+	//t.Log(srv.tracer.Len())
 }
 
 func TestUDPStream(t *testing.T) {
@@ -317,6 +319,7 @@ func TestUDPStream(t *testing.T) {
 		t.Logf("UDP Streamer didn't get enough message.")
 		t.Fail()
 	}
+	//t.Log(srv.tracer.Show())
 }
 
 func TestUDPFireStream(t *testing.T) {
@@ -359,12 +362,12 @@ func TestUDPFireStream(t *testing.T) {
 		return b
 	}
 	wg := sync.WaitGroup{}
-	for worker := 0; worker < 5; worker++ {
+	for worker := 0; worker < 3; worker++ {
 		wg.Add(1)
 		go func() {
 			for i := 0; i < 500; i++ {
-				time.Sleep(time.Microsecond * 10)
-				udpStreamer.Ship(generate(250))
+				time.Sleep(time.Microsecond * 5)
+				udpStreamer.Ship(generate(50))
 			}
 			wg.Done()
 		}()
