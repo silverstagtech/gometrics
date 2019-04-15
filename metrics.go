@@ -10,6 +10,11 @@ import (
 	"github.com/silverstagtech/gometrics/shippers"
 )
 
+var (
+	// GlobalMetricFactory is a metric factory that you can initialize to be used later.
+	GlobalMetricFactory *MetricFactory
+)
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }

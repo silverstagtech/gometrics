@@ -32,9 +32,9 @@ const (
 	//
 	// Example:
 	// metric_name[,tag=value,tag=value]:value|type[|sample_rate]
-	TaggingInflux = "influx"
+	TaggingInflux Tagging = "influx"
 	// TaggingNone will just drop the tags
-	TaggingNone = "none"
+	TaggingNone Tagging = "none"
 
 	// MagicTagSampleRate is used to serialize the sample rate on polys
 	MagicTagSampleRate = "sample_rate"
