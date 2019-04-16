@@ -50,7 +50,7 @@ func NewFactory(prefix string, defaultTags map[string]string, serializer seriali
 	}
 }
 
-// FlushGaugesEvery takes an int which represents milliseconds ans is used to flush gauges when required.
+// FlushGaugesEvery takes an int which represents milliseconds and is used to flush gauges when required.
 // As gauges track state they do not need to be flush out as often as counters.
 // If you are going to be using gauges then you will need to set this, if not then omit it.
 func (mf *MetricFactory) FlushGaugesEvery(milliseconds int) {

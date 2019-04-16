@@ -5,32 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/silverstagtech/gotracer"
-
 	"github.com/silverstagtech/gometrics/measurements"
 	"github.com/silverstagtech/gometrics/serializers/json"
 	"github.com/silverstagtech/gometrics/serializers/statsd"
 	"github.com/silverstagtech/gometrics/shippers/devnull"
+	"github.com/silverstagtech/gometrics/shippers/tracer"
 )
-
-type tracing struct {
-	tracer *gotracer.Tracer
-}
-
-func (tr tracing) Ship(b []byte) {
-	tr.tracer.Send(string(b))
-}
-
-// Remember to reset the tracer yourself.
-func (tr tracing) Shutdown() chan struct{} {
-	c := make(chan struct{}, 1)
-	close(c)
-	return c
-}
 
 func TestCounter(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -39,7 +23,7 @@ func TestCounter(t *testing.T) {
 	factory.Counter("counter", 100, 1, nil)
 	// TODO: make this a actual test
 	// Look for the name and the tags for default and supplied.
-	t.Logf("%v", sh.tracer.Show())
+	t.Logf("%v", sh.ExposeTracing().Show())
 }
 
 func BenchmarkCounter(b *testing.B) {
@@ -56,7 +40,7 @@ func BenchmarkCounter(b *testing.B) {
 
 func TestRate(t *testing.T) {
 	se := json.New(false)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -66,17 +50,17 @@ func TestRate(t *testing.T) {
 		factory.Counter("counter", 1, rate, nil)
 	}
 
-	if sh.tracer.Len() >= 100 {
-		t.Logf("counter with rate %f still gave %d counters.", rate, sh.tracer.Len())
+	if sh.ExposeTracing().Len() >= 100 {
+		t.Logf("counter with rate %f still gave %d counters.", rate, sh.ExposeTracing().Len())
 		t.Fail()
 	} else {
-		t.Logf("counter with rate %f gave %d counters.", rate, sh.tracer.Len())
+		t.Logf("counter with rate %f gave %d counters.", rate, sh.ExposeTracing().Len())
 	}
 }
 
 func TestSingleGaugeZero(t *testing.T) {
 	se := json.New(false)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -86,7 +70,7 @@ func TestSingleGaugeZero(t *testing.T) {
 	factory.RegisterGauge("gauge", nil)
 	factory.Shutdown()
 
-	if sh.tracer.Len() == 0 {
+	if sh.ExposeTracing().Len() == 0 {
 		t.Logf("Gauge did not get flushed")
 		t.Fail()
 	}
@@ -94,7 +78,7 @@ func TestSingleGaugeZero(t *testing.T) {
 
 func TestSingleGaugeFlush(t *testing.T) {
 	se := json.New(false)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -103,19 +87,19 @@ func TestSingleGaugeFlush(t *testing.T) {
 	factory.FlushGaugesEvery(2)
 	factory.RegisterGauge("gauge", nil)
 	factory.GaugeInc("test")
-	time.Sleep(time.Millisecond * 4)
-	factory.Shutdown()
+	time.Sleep(time.Millisecond * 10)
 
-	if sh.tracer.Len() < 2 {
+	if sh.ExposeTracing().Len() < 2 {
 		t.Logf("Gauge did not get flushed")
 		t.Fail()
 	}
-	t.Logf("%s\n", sh.tracer.Show())
+	factory.Shutdown()
+	t.Logf("%s\n", sh.ExposeTracing().Show())
 }
 
 func TestSingleGauge(t *testing.T) {
 	se := json.New(false)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -136,18 +120,18 @@ func TestSingleGauge(t *testing.T) {
 
 	factory.Shutdown()
 
-	if sh.tracer.Len() == 0 {
+	if sh.ExposeTracing().Len() == 0 {
 		t.Logf("Gauge did not get flushed")
 		t.Fail()
 	}
-	for _, output := range sh.tracer.Show() {
+	for _, output := range sh.ExposeTracing().Show() {
 		t.Logf("%s", output)
 	}
 }
 
 func TestMultipleGauges(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -176,11 +160,11 @@ func TestMultipleGauges(t *testing.T) {
 
 	factory.Shutdown()
 
-	if sh.tracer.Len() == 0 {
+	if sh.ExposeTracing().Len() == 0 {
 		t.Logf("Gauge did not get flushed")
 		t.Fail()
 	}
-	for _, output := range sh.tracer.Show() {
+	for _, output := range sh.ExposeTracing().Show() {
 		t.Logf("%s", output)
 	}
 }
@@ -189,7 +173,7 @@ func TestMultipleGauges(t *testing.T) {
 // from a map.
 func TestRemovingGauges(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -227,11 +211,11 @@ func TestRemovingGauges(t *testing.T) {
 
 	factory.Shutdown()
 
-	if sh.tracer.Len() != 0 {
+	if sh.ExposeTracing().Len() != 0 {
 		t.Logf("Gauges did not flush")
 		t.Fail()
 	}
-	for _, output := range sh.tracer.Show() {
+	for _, output := range sh.ExposeTracing().Show() {
 		t.Logf("%s", output)
 	}
 }
@@ -275,7 +259,7 @@ func BenchmarkGauges(b *testing.B) {
 
 func TestNilGauge(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -286,14 +270,14 @@ func TestNilGauge(t *testing.T) {
 	factory.RemoveGauge("test")
 	factory.Shutdown()
 
-	if sh.tracer.Len() != 0 {
-		t.Logf("Rouge metric in the buffer.\n%s", sh.tracer.Show())
+	if sh.ExposeTracing().Len() != 0 {
+		t.Logf("Rouge metric in the buffer.\n%s", sh.ExposeTracing().Show())
 	}
 }
 
 func TestTimers(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -309,7 +293,7 @@ func TestTimers(t *testing.T) {
 	factory.Timer("test_timer_hour", TimerH, time.Since(start), nil)
 	factory.Shutdown()
 
-	t.Logf("%s", sh.tracer.Show())
+	t.Logf("%s", sh.ExposeTracing().Show())
 }
 
 type badSerializer struct{}
@@ -329,7 +313,7 @@ func (badSerializer) Poly(m *measurements.Poly) ([]byte, error) {
 
 func TestFactoryError(t *testing.T) {
 	se := &badSerializer{}
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	gotError := false
 	errFunc := func(error) {
 		t.Logf("Caught factory error")
@@ -346,7 +330,7 @@ func TestFactoryError(t *testing.T) {
 
 func TestPolyEmpty(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -356,16 +340,16 @@ func TestPolyEmpty(t *testing.T) {
 	factory.SubmitPoly(p)
 	factory.Shutdown()
 
-	if sh.tracer.Len() < 1 {
+	if sh.ExposeTracing().Len() < 1 {
 		t.Logf("Empty poly didn't make a measurement")
 		t.Fail()
 	}
-	t.Logf("%s", sh.tracer.Show())
+	t.Logf("%s", sh.ExposeTracing().Show())
 }
 
 func TestPoly(t *testing.T) {
 	se := json.New(true)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -378,16 +362,16 @@ func TestPoly(t *testing.T) {
 	factory.SubmitPoly(p)
 	factory.Shutdown()
 
-	if sh.tracer.Len() < 1 {
+	if sh.ExposeTracing().Len() < 1 {
 		t.Logf("Poly didn't make a measurement")
 		t.Fail()
 	}
-	t.Logf("%s", sh.tracer.Show())
+	t.Logf("%s", sh.ExposeTracing().Show())
 }
 
 func TestPolyStatsD(t *testing.T) {
 	se := statsd.New(statsd.TaggingDataDog)
-	sh := &tracing{tracer: gotracer.New()}
+	sh := tracer.New()
 	defaultTags := map[string]string{
 		"testone": "1",
 	}
@@ -402,9 +386,9 @@ func TestPolyStatsD(t *testing.T) {
 	factory.SubmitPoly(p)
 	factory.Shutdown()
 
-	if sh.tracer.Len() < 1 {
+	if sh.ExposeTracing().Len() < 1 {
 		t.Logf("Poly didn't make a measurement")
 		t.Fail()
 	}
-	t.Logf("%s", sh.tracer.Show())
+	t.Logf("%s", sh.ExposeTracing().Show())
 }
