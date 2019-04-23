@@ -8,6 +8,9 @@ import (
 	"github.com/silverstagtech/gometrics/measurements"
 	"github.com/silverstagtech/gometrics/serializers"
 	"github.com/silverstagtech/gometrics/shippers"
+
+	"github.com/silverstagtech/gometrics/serializers/silent"
+	"github.com/silverstagtech/gometrics/shippers/devnull"
 )
 
 var (
@@ -17,6 +20,14 @@ var (
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+	startWithNothing()
+}
+
+func startWithNothing() {
+	serializer := silent.New()
+	shipper := devnull.New()
+
+	GlobalMetricFactory = NewFactory("", nil, serializer, shipper, func(e error) {})
 }
 
 // MetricFactory is used to create and send metrics out.
