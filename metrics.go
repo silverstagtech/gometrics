@@ -194,10 +194,24 @@ func (mf *MetricFactory) Timer(name string, precision TimerPrecision, value time
 	mf.shipper.Ship(b)
 }
 
+// TimerWithRate is like Timer but has a sample rate
+func (mf *MetricFactory) TimerWithRate(name string, precision TimerPrecision, value time.Duration, rate float32, tags map[string]string) {
+	if !gatekeeper(rate) {
+		return
+	}
+	mf.Timer(name, precision, value, tags)
+}
+
+// NewPoly returns a Poly measurement which can be filled in by the caller and
+// submitted back using SubmitPoly.
+// Due to Poly measurements being more complex users normally take them, use them
+// as they process something and at the end submit them. Although you could submit
+// the values at the begining and just submit the returned poly.
 func (mf *MetricFactory) NewPoly(name string, fields map[string]interface{}, tags map[string]string) *measurements.Poly {
 	return measurements.NewPoly(mf.prefix, name, fields, mergeTags(mf.defaultTags, tags))
 }
 
+// SubmitPoly will take a Poly measurement and ship it.
 func (mf *MetricFactory) SubmitPoly(poly *measurements.Poly) {
 	b, err := mf.serializer.Poly(poly)
 	if err != nil {

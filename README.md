@@ -21,7 +21,7 @@ Features on metrics
 - [x] Tagging on individual metrics
 - [x] Sample rate for counters
 - [x] Shipper with plugins
-- [ ] Shipper: Streaming UDP/TCP
+- [x] Shipper: Streaming UDP/TCP
 - [ ] Shipper: Influx HTTP(S)
 - [x] Shipper: STDOUT
 - [x] Shipper: DevNull
