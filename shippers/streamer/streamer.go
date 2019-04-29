@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/silverstagtech/gometrics/shippers"
 )
 
 // Protocol is a networking protocol that is supported by the streamer
@@ -52,17 +54,18 @@ type Option func(*Streamer)
 
 // Streamer is used to send messages on the network as a stream of data via UDP or TCP
 type Streamer struct {
-	address         string
-	packetSize      int
-	protocol        Protocol
-	connected       bool
-	buffer          *buffer
-	ticker          *time.Ticker
-	shutdown        chan struct{}
-	conn            net.Conn
-	joint           []byte
-	onErrfunc       func(error)
-	udpSendOversize bool
+	address             string
+	packetSize          int
+	protocol            Protocol
+	connected           bool
+	buffer              *buffer
+	ticker              *time.Ticker
+	shutdown            chan struct{}
+	conn                net.Conn
+	joint               []byte
+	onErrfunc           func(error)
+	ratedLimitErrorFunc func(error)
+	udpSendOversize     bool
 }
 
 // New create a streamer applies the options and then returns a pointer to the new streamer.
@@ -212,7 +215,7 @@ func (stream *Streamer) Ship(b []byte) {
 	select {
 	case stream.buffer.in <- append(b, stream.joint...):
 	default:
-		stream.onErrfunc(fmt.Errorf("Buffer is full or closed, can't send measurement"))
+		stream.ratedLimitErrorFunc(fmt.Errorf("Buffer is full or closed, can't send measurement"))
 	}
 }
 
@@ -272,6 +275,25 @@ func SetConcatinator(c string) func(*Streamer) {
 func SetOnError(errFunc func(error)) func(*Streamer) {
 	return func(s *Streamer) {
 		s.onErrfunc = errFunc
+		s.ratedLimitErrorFunc = shippers.RateLimitedErrors(
+			time.Second*3,
+			3,
+			"Rate limit for errors triggered, suppression future messages for 3 seconds. Error: ",
+			errFunc,
+		)
+	}
+}
+
+// SetOnErrorRateLimited override the default ratelimited error messages.
+// Used in places where errors are able to flood the system when things go bad.
+func SetOnErrorRateLimited(timeLimit time.Duration, maxErrors int, suppressionMessage string, errFunc func(error)) func(*Streamer) {
+	return func(s *Streamer) {
+		s.ratedLimitErrorFunc = shippers.RateLimitedErrors(
+			timeLimit,
+			maxErrors,
+			suppressionMessage,
+			errFunc,
+		)
 	}
 }
 

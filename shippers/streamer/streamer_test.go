@@ -431,3 +431,34 @@ func TestIntervalFlush(t *testing.T) {
 	t.Logf("triggered output: %s", srv.tracer.Show())
 	t.Logf("triggered length: %d", srv.tracer.Len())
 }
+
+func TestErrors(t *testing.T) {
+	tracing := gotracer.New()
+	errFunc := func(err error) {
+		tracing.SendInterface(err)
+	}
+	stream := New(
+		SetOnError(errFunc),
+		SetOnErrorRateLimited(time.Millisecond*3, 3, "Rate limit hit. Error:", errFunc),
+	)
+
+	shipJunk := func() {
+		for i := 0; i < 1000; i++ {
+			stream.Ship([]byte("Test metric that will fail"))
+		}
+	}
+
+	// Try and ship with no collection out of the buffer
+	// We will get errors stating that the buffer is full.
+	// They must be rate limited.
+	shipJunk()
+	time.Sleep(time.Millisecond * 3)
+	shipJunk()
+
+	// We expect 9 messages after sending 2 times with a sleep in the middle.
+	if tracing.Len() > 9 {
+		t.Logf("Errors are flooding out. Errors traced:")
+		tracing.PrintlnT(t)
+		t.Fail()
+	}
+}
