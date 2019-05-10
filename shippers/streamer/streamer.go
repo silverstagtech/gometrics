@@ -45,6 +45,11 @@ const (
 	DefaultTickerTime = 2000
 	// DefaultConcatinator is used to join []bytes received by Ship when sending on the network
 	DefaultConcatinator = byte(10)
+	// DefaultReconnectionAttempts will be used when trying to reconnect after a failed write
+	// After this many reconnections the data is dropped.
+	DefaultReconnectionAttempts = 3
+	// DefaultReconnectionWaitMS how long to wait between each attempt
+	DefaultReconnectionWaitMS = 250
 	// EOF End of File
 	EOF = byte(0)
 )
@@ -54,29 +59,33 @@ type Option func(*Streamer)
 
 // Streamer is used to send messages on the network as a stream of data via UDP or TCP
 type Streamer struct {
-	address             string
-	packetSize          int
-	protocol            Protocol
-	connected           bool
-	buffer              *buffer
-	ticker              *time.Ticker
-	shutdown            chan struct{}
-	conn                net.Conn
-	joint               []byte
-	onErrfunc           func(error)
-	ratedLimitErrorFunc func(error)
-	udpSendOversize     bool
+	address              string
+	packetSize           int
+	protocol             Protocol
+	connected            bool
+	buffer               *buffer
+	ticker               *time.Ticker
+	shutdown             chan struct{}
+	conn                 net.Conn
+	joint                []byte
+	onErrfunc            func(error)
+	ratedLimitErrorFunc  func(error)
+	udpSendOversize      bool
+	reconnectionAttempts int
+	reconnectionWaitMS   time.Duration
 }
 
 // New create a streamer applies the options and then returns a pointer to the new streamer.
 func New(options ...Option) *Streamer {
 	streamer := &Streamer{
-		packetSize:      DefaultMaxPacketSize,
-		buffer:          newBuffer(),
-		protocol:        UDP,
-		joint:           []byte{DefaultConcatinator},
-		shutdown:        make(chan struct{}, 1),
-		udpSendOversize: true,
+		packetSize:           DefaultMaxPacketSize,
+		joint:                []byte{DefaultConcatinator},
+		reconnectionAttempts: DefaultReconnectionAttempts,
+		reconnectionWaitMS:   time.Microsecond * DefaultReconnectionWaitMS,
+		buffer:               newBuffer(),
+		protocol:             UDP,
+		shutdown:             make(chan struct{}, 1),
+		udpSendOversize:      true,
 	}
 
 	for _, option := range options {
@@ -91,14 +100,19 @@ func New(options ...Option) *Streamer {
 
 // Connect will connect the streamer.
 func (stream *Streamer) Connect() error {
-	c, err := net.Dial(string(stream.protocol), stream.address)
+	c, err := stream.connect()
 	if err != nil {
 		return err
 	}
+
 	stream.conn = c
 	stream.startSending()
 	stream.buffer.init()
 	return nil
+}
+
+func (stream *Streamer) connect() (net.Conn, error) {
+	return net.Dial(string(stream.protocol), stream.address)
 }
 
 func (stream *Streamer) startSending() {
@@ -122,7 +136,42 @@ func (stream *Streamer) startSending() {
 }
 
 func (stream *Streamer) sendTCP() {
+	tryWrite := func(b [][]byte) bool {
+		_, err := stream.conn.Write(bytes.Join(b, nil))
+		if err != nil {
+			stream.onErrfunc(err)
+			return false
+		}
+		return true
+	}
+
+	reconnectTCP := func() bool {
+		reconnected := false
+		for try := 1; try <= stream.reconnectionAttempts; try++ {
+			if stream.recoverTCPConnection() {
+				reconnected = true
+				break
+			}
+			time.Sleep(stream.reconnectionWaitMS)
+		}
+		if !reconnected {
+			stream.onErrfunc(fmt.Errorf("Failed to recover the TCP connection after 3 reconnection attempts"))
+		}
+		return reconnected
+	}
+
+	tcpConnectionWorking := true
+
 	for {
+		// Is our TCP connection alive and kicking or do we need to try get it back.
+		if !tcpConnectionWorking {
+			if !reconnectTCP() {
+				continue
+			}
+			tcpConnectionWorking = true
+		}
+
+		// We can only try write if we know we have a working TCP connection
 		select {
 		case data, ok := <-stream.buffer.out:
 			if !ok {
@@ -134,12 +183,42 @@ func (stream *Streamer) sendTCP() {
 				close(stream.shutdown)
 				return
 			}
-			_, err := stream.conn.Write(bytes.Join(data, nil))
-			if err != nil {
-				stream.onErrfunc(err)
+
+			if !tryWrite(data) {
+				// At this point the write failed and the TCP connection has likely failed.
+				// Can close the connection, and try to connect again.
+
+				// TCP connection is considered dead
+				tcpConnectionWorking = false
+
+				// Try reconnect and send the data again. If it failed again, then it should drop
+				// the data as it is a bigger problem than just reconnecting.
+				// Metrics are sent on best effort so this behavior fits that model.
+				// This function itself will keep trying to reconnect.
+				if reconnectTCP() {
+					// Once connected, try write again. If it is successful, then the TCP connection
+					// will get a true showing its ok. Else it gets a false which will trigger the
+					// above reconnection loop.
+					tcpConnectionWorking = tryWrite(data)
+				}
 			}
 		}
 	}
+}
+
+func (stream *Streamer) recoverTCPConnection() bool {
+	// If we are here then we think that the connection is dead.
+
+	// Close it and reconnect
+	// Go could think its still open so close it to release the resources.
+	stream.conn.Close()
+	conn, err := stream.connect()
+	if err != nil {
+		stream.onErrfunc(err)
+		return false
+	}
+	stream.conn = conn
+	return true
 }
 
 func (stream *Streamer) sendUDP() {
@@ -303,5 +382,26 @@ func SetOnErrorRateLimited(timeLimit time.Duration, maxErrors int, suppressionMe
 func SetSendOversize(toggle bool) func(*Streamer) {
 	return func(s *Streamer) {
 		s.udpSendOversize = toggle
+	}
+}
+
+// SetReconnectionAttempts sets Reconnection Attempts on the streamer. Used when connections
+// make use of TCP connections. If a TCP connection breaks then the streamer will try to
+// reconnect before dropping the data it was trying to write when it discovered the stream
+// was broken. If this number of reconnection attempts is reached the data is dropped
+// and the streamer will keep trying to connect before attempting to write more data.
+// In this situation the buffers holding metrics will fill up and start dropping data
+// until the connection is established again.
+func SetReconnectionAttempts(attempts int) func(*Streamer) {
+	return func(s *Streamer) {
+		s.reconnectionAttempts = attempts
+	}
+}
+
+// SetReconnectionAttemptWait sets how long to wait between attempts to reconnect.
+// See SetReconnectionAttemptWait for more details
+func SetReconnectionAttemptWait(milliseconds int) func(*Streamer) {
+	return func(s *Streamer) {
+		s.reconnectionWaitMS = time.Millisecond * time.Duration(milliseconds)
 	}
 }

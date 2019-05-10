@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"regexp"
 	"sync"
 	"testing"
 	"time"
@@ -108,7 +109,32 @@ func (ns *NetServer) tcpHandleConnection(conn net.Conn) {
 			ns.t.Fail()
 			break
 		}
+
+		// If the message is empty exit out
 		if len(req) == 0 {
+			break
+		}
+
+		// Ship adds a 10 onto the message before sending it.
+		// To get the connection to artificially close we can send a 0, but it will be
+		// before the 10. Look for it.
+		// We expect multiple metrics on the stream, so we are ONLY looking for a 0 (EOF)
+		if req[len(req)-1] == 10 {
+			if len(req) > 1 {
+				if req[len(req)-2] == 0 {
+					// gather everything before the EOF
+					ns.tracer.SendBytes(req[:len(req)-2])
+					break
+				}
+			}
+		}
+
+		// If we got a 0 we treat it as a EOF
+		if req[len(req)-1] == 0 {
+			// gather everything before the EOF
+			if len(req) > 1 {
+				ns.tracer.SendBytes(req[:len(req)-1])
+			}
 			break
 		}
 
@@ -139,6 +165,7 @@ func (ns *NetServer) Messages() []string {
 
 // Close shuts down the TCP Server
 func (ns *NetServer) Close() (err error) {
+	// Lazy way of getting the connections to flush
 	time.Sleep(time.Millisecond * 10)
 	switch ns.protocol {
 	case TCP:
@@ -204,6 +231,75 @@ func TestTCPStream(t *testing.T) {
 	}
 	if srv.tracer.Len() < 1 {
 		t.Logf("TCP Streamer didn't get a message.")
+		t.Fail()
+	}
+}
+
+func TestTCPRecovery(t *testing.T) {
+	srv, err := NewServer(t, TCP)
+	if err != nil {
+		t.Logf("Failed to create a TCP server to test. Error: %s", err)
+		t.Fail()
+	}
+	<-srv.Run()
+	errorTracer := gotracer.New()
+	tcpStreamer := New(
+		SetAddress(fmt.Sprintf("%s:%d", srv.addr, srv.port)),
+		SetProtocol(TCP),
+		SetFlushInterval(time.Millisecond*2),
+		SetOnError(func(err error) { errorTracer.SendInterface(err) }),
+		SetReconnectionAttemptWait(2),
+		SetReconnectionAttempts(3),
+	)
+
+	if err := tcpStreamer.Connect(); err != nil {
+		t.Logf("TCP streamer failed to connect. Error: %s", err)
+		t.Fail()
+	}
+
+	msg := make([]byte, 12)
+	for index, char := range "test_metric" {
+		msg[index] = byte(char)
+	}
+	msg[len(msg)-1] = 0
+
+	sendCount := 0
+	sendMsg := func(howMany int) {
+		for i := 0; i < howMany; i++ {
+			tcpStreamer.Ship(msg)
+			sendCount++
+			time.Sleep(time.Millisecond * 8)
+		}
+	}
+
+	sendMsg(5)
+	err = srv.Close()
+	if err != nil {
+		fmt.Println(err)
+	}
+	sendMsg(20)
+	time.Sleep(time.Millisecond * 50)
+	<-srv.Run()
+	sendMsg(20)
+
+	srv.Close()
+
+	dropDataCount := 0
+	dropMatch := regexp.MustCompile(`Failed to recover the TCP connection after`)
+	for _, err := range errorTracer.ShowRaw() {
+		v, _ := err.(error)
+		if dropMatch.MatchString(v.Error()) {
+			dropDataCount++
+		}
+	}
+
+	if dropDataCount == 0 {
+		t.Logf("TCP Connection test did not drop data. The test can't be sure that recovery worked.")
+		t.Fail()
+	}
+
+	if srv.tracer.Len() <= 5 {
+		t.Logf("Only got %d messages. Expected more to arrive.", srv.tracer.Len())
 		t.Fail()
 	}
 }
