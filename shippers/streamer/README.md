@@ -14,7 +14,7 @@ It plenty fast enough...
 
 ### TCP Mode
 
-TCP mode will flush all the bytes out the buffer and send it in a stream. Slower than TCP but reliable.
+TCP mode will flush all the bytes out the buffer and send it in a stream. Slower than UDP but reliable.
 
 ### UDP Buffered
 
@@ -24,7 +24,6 @@ The default packet size is 1472 bytes
 Default LAN MTU 1500 bytes - 8 byte UDP header + 20 byte IP header
 
 If you increase it remember that the 28bytes will still be added by the OS so make sure you factor it in.
-
 
 ### UDP Fire Stream 🔥
 
